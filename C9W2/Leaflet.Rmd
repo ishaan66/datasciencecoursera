@@ -1,0 +1,19 @@
+---
+title: "Leaflet"
+author: "Ishaan Gupta"
+date: "2023-12-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Leaflet Map Example
+```{r map}
+library(leaflet)
+# Create a Leaflet map
+leaflet() %>% 
+  addTiles() %>% 
+  addMarkers(lng = -73.985428, lat = 40.748817, popup = "Hello, Leaflet!")
+```
