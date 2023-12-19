@@ -1,0 +1,100 @@
+---
+title: "Analysis of Movement Data"
+author: "Ishaan Gupta"
+date: "2023-12-17"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the Data
+```{r load, cache=TRUE}
+# Load training data
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train_data <- read.csv(url(trainUrl))
+
+# Load testing data
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test_data <- read.csv(url(testUrl))
+```
+
+# Data Exploration
+The Data set used in the analysis describes six participants who were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl. Each exercise was categorized as  exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+We can see the distribution of the classes for each participant in:
+```{r exploration}
+# Assuming train_data is your data frame
+library(ggplot2)
+
+# Create a histogram for each user
+ggplot(train_data, aes(x = user_name, fill = classe)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(title = "Histogram of Classes for Each User",
+       x = "User",
+       y = "Count") +
+  scale_fill_brewer(palette = "Set3") +  # You can choose a different color palette if needed
+  theme_minimal()
+```
+
+# Data Cleanup
+
+We remove all the columns with many missing values.
+```{r cleanup_missing}
+library(caret)
+remove_cols <- nearZeroVar(train_data, saveMetrics = TRUE)
+train_data <- train_data[, !remove_cols$nzv]
+test_data <- test_data[, !remove_cols$nzv]
+```
+
+We remove columns with NAs
+```{r cleanup, warning=FALSE, error=FALSE}
+remove_cols <- colSums(is.na(train_data)) == 0
+train_data <- train_data[, remove_cols]
+test_data <- test_data[, remove_cols]
+```  
+
+We remove variables with timestamp or user_name since they are not likely to affect the classe. Also, we remove the 'X' column since it is just an index field.
+```{r cleanup_times}
+# Identify and exclude columns with names starting with "X" or containing "timestamp" or "user_name"
+remove_cols <- grepl("timestamp|user_name|X", names(train_data))
+train_data <- train_data[, !remove_cols]
+test_data <- test_data[, !remove_cols]
+```
+
+# Partitioning Train and Validation Data
+We split the preprocessed training set into a training dataset (70%) and a validation dataset (30%).
+The validation dataset will be used for cross-validation in subsequent steps.
+```{r partition, warning=FALSE, error=FALSE}
+training_idx <- createDataPartition(train_data$classe, p = 0.70, list = FALSE)
+val_data <- train_data[-training_idx, ]
+train_data <- train_data[training_idx, ]
+```  
+
+# Random Forest
+We will use the <b>Random Forest</b> algorithm to predict the class because it automatically selects important variables and is robust to correlated covariates & outliers in general.  
+We will use <b>5-fold cross validation</b> when applying the algorithm.  
+```{r forest, warning=FALSE, error=FALSE}
+forest <- train(classe ~ ., data = train_data, method = "rf", trControl = trainControl(method = "cv", number =5), ntree = 250)
+forest
+```
+
+# Validation
+Now, we test the performance of our random forest model on the validation set
+```{r validation, warning=FALSE, error=FALSE}
+val_results <- predict(forest, val_data)
+confusionMatrix(factor(val_data$classe), val_results)
+accuracy <- postResample(val_results, factor(val_data$classe))
+``` 
+
+The estimated accuracy of our model is `r accuracy[1]*100`%.
+
+# Test Set
+Now we can test our model on the final test set
+```{r testing, warning=FALSE, error=FALSE}
+predict(forest, test_data)
+```  
